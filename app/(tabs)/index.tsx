@@ -1,37 +1,76 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons'; // Assuming Expo environment based on vector icons usage
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+// Import the Supabase client configured in Phase 2
+import { supabase } from './lib/supabase';
 
 export default function App() {
-  // 4.2 Add Input State
+  // State variables remains local for input and UI synchronization
   const [task, setTask] = useState('');
-
-  // 4.3 Add Tasks State
   const [tasks, setTasks] = useState([]);
 
-  // 4.5 A First Look at useEffect
+  // 5.2 Read — Load Tasks on Startup via useEffect
   useEffect(() => {
-    console.log('Component mounted!');
-    // This is where Supabase data fetching will live in Phase 5
+    loadTasks();
   }, []);
 
-  // 4.4 A Temporary, Local Add Button Handler
-  function handleAddTask() {
-    // Prevent adding empty tasks or strings containing only spaces
+  // 5.2 Read — Fetch rows from Supabase 'tasks' table
+  async function loadTasks() {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.log('Error loading tasks:', error.message);
+      return;
+    }
+    setTasks(data);
+  }
+
+  // 5.3 Create — Insert new task to Supabase and reload
+  async function addTask() {
     if (task.trim() === '') return;
 
-    // IMMUTABLE UPDATE: Create a new array with the spread operator and append the new task object
-    setTasks([
-      ...tasks, 
-      { 
-        id: Date.now().toString(), // Temporary unique ID using timestamp
-        title: task, 
-        completed: false 
-      }
-    ]);
+    const { error } = await supabase
+      .from('tasks')
+      .insert([{ title: task, completed: false }]);
 
-    // Clear the input box after adding
-    setTask('');
+    if (error) {
+      console.log('Error adding task:', error.message);
+      return;
+    }
+
+    setTask(''); // Clear input text box
+    loadTasks(); // Fetch fresh data from backend
+  }
+
+  // 5.4 Update — Toggle completion status by targeting specific row ID
+  async function toggleTask(item) {
+    const { error } = await supabase
+      .from('tasks')
+      .update({ completed: !item.completed })
+      .eq('id', item.id);
+
+    if (error) {
+      console.log('Error updating task:', error.message);
+      return;
+    }
+    loadTasks(); // Fetch fresh data from backend
+  }
+
+  // 5.5 Delete — Remove task via unique ID on long press
+  async function deleteTask(id) {
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.log('Error deleting task:', error.message);
+      return;
+    }
+    loadTasks(); // Fetch fresh data from backend
   }
 
   return (
@@ -44,27 +83,35 @@ export default function App() {
           style={styles.input}
           placeholder="Enter Task"
           placeholderTextColor="#A0AAB8"
-          value={task}              // Controlled Component: binds UI to state
-          onChangeText={setTask}    // Updates state on every keystroke
+          value={task}
+          onChangeText={setTask}
         />
-        <TouchableOpacity style={styles.addButton} onPress={handleAddTask}>
+        <TouchableOpacity style={styles.addButton} onPress={addTask}>
           <MaterialIcons name="add" size={22} color="#fff" />
         </TouchableOpacity>
       </View>
 
-      {/* Task List Section */}
-      <ScrollView style={styles.listContainer}>
-        {tasks.map((item) => (
-          <View key={item.id} style={styles.taskRow}>
-            <MaterialIcons
-              name={item.completed ? 'check-box' : 'check-box-outline-blank'}
-              size={20}
-              color={item.completed ? '#2E5BBA' : '#5A6472'}
-            />
-            <Text style={styles.taskText}>{item.title}</Text>
-          </View>
-        ))}
-      </ScrollView>
+      {/* 5.6 Upgraded Task List Section: FlatList replaces ScrollView & .map() */}
+      <FlatList
+        data={tasks}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            onPress={() => toggleTask(item)}
+            onLongPress={() => deleteTask(item.id)}
+          >
+            <View style={styles.taskRow}>
+              <MaterialIcons
+                name={item.completed ? 'check-box' : 'check-box-outline-blank'}
+                size={20}
+                color={item.completed ? '#2E5BBA' : '#5A6472'}
+              />
+              <Text style={styles.taskText}>{item.title}</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+        style={styles.listContainer}
+      />
     </View>
   );
 }
