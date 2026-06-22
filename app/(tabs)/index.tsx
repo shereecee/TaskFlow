@@ -1,135 +1,77 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-// Verified relative import path climbing up out of app/(tabs)/
-import { supabase } from '../../lib/supabase';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons'; // Assuming Expo environment based on vector icons usage
 
-export default function TaskFlowScreen() {
-  // Local UI State
-  const [task, setTask] = useState('');     // Holds current text input
-  const [tasks, setTasks] = useState([]);   // Holds array of tasks retrieved from Supabase
+export default function App() {
+  // 4.2 Add Input State
+  const [task, setTask] = useState('');
 
-  // ==========================================
-  // SUPABASE CRUD OPERATIONS
-  // ==========================================
+  // 4.3 Add Tasks State
+  const [tasks, setTasks] = useState([]);
 
-  // 5.2 READ — Load Tasks on Startup
-  async function loadTasks() {
-    const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .order('created_at', { ascending: false }); // Newest tasks at the top
-
-    if (error) {
-      console.log('Error loading tasks:', error.message);
-      return; // Bail out early if there is an error
-    }
-    
-    setTasks(data || []); // Update local state with real data from cloud
-  }
-
-  // Hook to trigger initial fetch once on component mount
+  // 4.5 A First Look at useEffect
   useEffect(() => {
-    loadTasks();
+    console.log('Component mounted!');
+    // This is where Supabase data fetching will live in Phase 5
   }, []);
 
-  // 5.3 CREATE — Add Task to Supabase
-  async function addTask() {
+  // 4.4 A Temporary, Local Add Button Handler
+  function handleAddTask() {
+    // Prevent adding empty tasks or strings containing only spaces
     if (task.trim() === '') return;
 
-    const { error } = await supabase
-      .from('tasks')
-      .insert([{ title: task.trim(), completed: false }]); // Supabase expects an array of objects
+    // IMMUTABLE UPDATE: Create a new array with the spread operator and append the new task object
+    setTasks([
+      ...tasks, 
+      { 
+        id: Date.now().toString(), // Temporary unique ID using timestamp
+        title: task, 
+        completed: false 
+      }
+    ]);
 
-    if (error) {
-      console.log('Error adding task:', error.message);
-      return;
-    }
-
-    setTask('');   // Clear text field upon success
-    loadTasks();   // Refresh data to show newly added item
-  }
-
-  // 5.4 UPDATE — Toggle Completion
-  async function toggleTask(item) {
-    const { error } = await supabase
-      .from('tasks')
-      .update({ completed: !item.completed })
-      .eq('id', item.id); // Target only this specific task row
-
-    if (error) {
-      console.log('Error updating task:', error.message);
-      return;
-    }
-
-    loadTasks();   // Refresh data to reflect updated UI check status
-  }
-
-  // 5.5 DELETE — Remove a Task
-  async function deleteTask(id) {
-    const { error } = await supabase
-      .from('tasks')
-      .delete()
-      .eq('id', id); // Only delete the targeted row
-
-    if (error) {
-      console.log('Error deleting task:', error.message);
-      return;
-    }
-
-    loadTasks();   // Refresh data to clear deleted row from screen
+    // Clear the input box after adding
+    setTask('');
   }
 
   return (
     <View style={styles.container}>
       <Text style={styles.headerTitle}>TaskFlow</Text>
 
-      {/* Input Form Section */}
+      {/* Input Section */}
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
           placeholder="Enter Task"
           placeholderTextColor="#A0AAB8"
-          value={task}
-          onChangeText={setTask}
+          value={task}              // Controlled Component: binds UI to state
+          onChangeText={setTask}    // Updates state on every keystroke
         />
-        <TouchableOpacity style={styles.addButton} onPress={addTask}>
+        <TouchableOpacity style={styles.addButton} onPress={handleAddTask}>
           <MaterialIcons name="add" size={22} color="#fff" />
         </TouchableOpacity>
       </View>
 
-      {/* 5.6 Optimized Task List Section via FlatList */}
-      <FlatList
-        data={tasks}
-        keyExtractor={(item) => item.id.toString()} // Handles key allocation implicitly
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            onPress={() => toggleTask(item)}        // Single tap toggles checkbox status
-            onLongPress={() => deleteTask(item.id)} // Long press triggers deletion
-            activeOpacity={0.7}
-          >
-            <View style={styles.taskRow}>
-              <MaterialIcons
-                name={item.completed ? 'check-box' : 'check-box-outline-blank'}
-                size={20}
-                color={item.completed ? '#2E5BBA' : '#5A6472'}
-              />
-              <Text style={[styles.taskText, item.completed && styles.taskTextCompleted]}>
-                {item.title}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        )}
-        contentContainerStyle={styles.listContainer}
-      />
+      {/* Task List Section */}
+      <ScrollView style={styles.listContainer}>
+        {tasks.map((item) => (
+          <View key={item.id} style={styles.taskRow}>
+            <MaterialIcons
+              name={item.completed ? 'check-box' : 'check-box-outline-blank'}
+              size={20}
+              color={item.completed ? '#2E5BBA' : '#5A6472'}
+            />
+            <Text style={styles.taskText}>{item.title}</Text>
+          </View>
+        ))}
+      </ScrollView>
     </View>
   );
 }
 
-// Layout styling parameters
 const styles = StyleSheet.create({
   container: {
-    flex: 1, // Enforces the root view to scale properly for FlatList scrolling compatibility
+    flex: 1,
     backgroundColor: '#F5F7FA',
     paddingTop: 60,
     paddingHorizontal: 20,
@@ -165,7 +107,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   listContainer: {
-    paddingBottom: 20,
+    flex: 1,
   },
   taskRow: {
     flexDirection: 'row',
@@ -181,9 +123,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#334155',
     marginLeft: 12,
-  },
-  taskTextCompleted: {
-    textDecorationLine: 'line-through', // Visual feedback for checked tasks
-    color: '#94A3B8',
   },
 });
