@@ -1,21 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import Toast from 'react-native-toast-message';
 
-// ✅ The Correct Path: Go up two steps to reach the root level lib folder
+// Core State/Database Link
 import { supabase } from '../../lib/supabase';
 
-// Component Imports
-import TaskForm from '../../components/TaskForm';
+// Visual Presentation Components
 import TaskItem from '../../components/TaskItem';
+import AddTaskModal from '../../components/AddTaskModal';
 
 export default function App() {
-  const [task, setTask] = useState('');
   const [tasks, setTasks] = useState([]);
+  const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
     loadTasks();
   }, []);
 
+  // 5.2 Read — Fetch items from backend
   async function loadTasks() {
     const { data, error } = await supabase
       .from('tasks')
@@ -23,28 +26,29 @@ export default function App() {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.log('Error loading tasks:', error.message);
+      Toast.show({ type: 'error', text1: 'Connection Failed', text2: error.message });
       return;
     }
     setTasks(data || []);
   }
 
-  async function addTask() {
-    if (task.trim() === '') return;
-
+  // 7.4 Create — Controlled execution loop called by Modal submission
+  async function handleSubmitTask(title) {
     const { error } = await supabase
       .from('tasks')
-      .insert([{ title: task, completed: false }]);
+      .insert([{ title: title, completed: false }]);
 
     if (error) {
-      console.log('Error adding task:', error.message);
+      Toast.show({ type: 'error', text1: 'Could not add task', text2: error.message });
       return;
     }
 
-    setTask(''); 
-    loadTasks(); 
+    setModalVisible(false); // Close Modal context window
+    loadTasks();           // Reload view cache
+    Toast.show({ type: 'success', text1: 'Task added successfully! ✨' });
   }
 
+  // 5.4 Update — Flip Task Completion Data Bound Matrix rows
   async function toggleTask(item) {
     const { error } = await supabase
       .from('tasks')
@@ -52,12 +56,13 @@ export default function App() {
       .eq('id', item.id);
 
     if (error) {
-      console.log('Error updating task:', error.message);
+      Toast.show({ type: 'error', text1: 'Failed to update task state' });
       return;
     }
-    loadTasks(); 
+    loadTasks();
   }
 
+  // 5.5 Delete — Wipe entries out of database records
   async function deleteTask(id) {
     const { error } = await supabase
       .from('tasks')
@@ -65,24 +70,27 @@ export default function App() {
       .eq('id', id);
 
     if (error) {
-      console.log('Error deleting task:', error.message);
+      Toast.show({ type: 'error', text1: 'Could not drop row context' });
       return;
     }
-    loadTasks(); 
-  }
-
-  function handleAddTask() {
-    addTask();
+    loadTasks();
+    Toast.show({ type: 'success', text1: 'Task dropped safely.' });
   }
 
   return (
     <View style={styles.container}>
-      <View style={headerStyles.header}>
+      {/* Top App Header Section Layout Row */}
+      <View style={headerStyles.headerRow}>
         <Text style={headerStyles.headerTitle}>TaskFlow</Text>
+        <TouchableOpacity 
+          style={headerStyles.openButton} 
+          onPress={() => setModalVisible(true)}
+        >
+          <MaterialIcons name="add-task" size={24} color="#FFF" />
+        </TouchableOpacity>
       </View>
 
-      <TaskForm task={task} setTask={setTask} onAdd={handleAddTask} />
-
+      {/* Render optimized dynamic lists */}
       <FlatList
         data={tasks}
         keyExtractor={(item) => item.id.toString()}
@@ -90,16 +98,26 @@ export default function App() {
           <TaskItem item={item} onToggle={toggleTask} onDelete={deleteTask} />
         )}
         style={styles.listContainer}
+        contentContainerStyle={styles.listContent}
+      />
+
+      {/* Embedded Action Overlay Subtree Sheet */}
+      <AddTaskModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onSubmit={handleSubmitTask}
       />
     </View>
   );
 }
 
 const headerStyles = StyleSheet.create({
-  header: {
-    paddingTop: 10,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'between',
     paddingBottom: 16,
-    marginBottom: 10,
+    marginBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
@@ -107,7 +125,16 @@ const headerStyles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: '#1E293B',
+    flex: 1,
   },
+  openButton: {
+    backgroundColor: '#2E5BBA',
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    justifyContent: 'center',
+    alignItems: 'center',
+  }
 });
 
 const styles = StyleSheet.create({
@@ -120,4 +147,7 @@ const styles = StyleSheet.create({
   listContainer: {
     flex: 1,
   },
+  listContent: {
+    paddingBottom: 40,
+  }
 });
